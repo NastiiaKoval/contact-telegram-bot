@@ -1,7 +1,7 @@
 import datetime
 import random
 import asyncio
-from telegram import Bot, Updategit add main_send_bot.py requirements.txt .gitignore
+from telegram import Bot, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # 🔐 Token і дозвіл тільки для акаунту https://t.me/contact_academy
