@@ -189,7 +189,8 @@ async def main():
         await app.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            webhook_url=f"https://{RENDER_EXTERNAL_URL}/"
+            webhook_url=f"https://contact-telegram-bot.onrender.com/webhook/{BOT_TOKEN}",
+            webhook_path=f"/webhook/{BOT_TOKEN}"
         )
     else:
         # Інакше локально — запускаємо через POLLING
