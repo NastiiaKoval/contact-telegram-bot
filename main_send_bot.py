@@ -54,7 +54,7 @@ async def get_chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 # 📅 Групи з розкладом
 groups = [
     # Вівторок (1)
-    {"chat_id": "-1001923361033", "weekday": 4, "lesson_time": "10:00"},  # тестовий
+    {"chat_id": "-1001923361033", "weekday": 6, "lesson_time": "10:00"},  # тестовий
     {"chat_id": "-1002473135036", "weekday": 1, "lesson_time": "16:00"},  # ВТ 16:00
     {"chat_id": "-1002261828597", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10
     {"chat_id": "-1002214877213", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10
@@ -99,9 +99,39 @@ months_ukr = {
 }
 
 # Обробник команди send
+# async def send_group_reminders(bot: Bot):
+#     today = datetime.datetime.now()
+#     tomorrow = today + datetime.timedelta(days=1)
+#     tomorrow_weekday = tomorrow.weekday()
+#
+#     day = tomorrow.day
+#     month = months_ukr[tomorrow.month]
+#     tomorrow_str = f"{day} {month}"
+#
+#     sent = False
+#
+#     for group in groups:
+#         if group["weekday"] == tomorrow_weekday:
+#             message = (
+#                 f"{random.choice(greetings)}\n\n"
+#                 f"{random.choice(stickers)} Нагадуємо, що завтра, {tomorrow_str}, о {group['lesson_time']} ми чекаємо вас на занятті\n\n"
+#                 f"{random.choice(bottoms)}"
+#             )
+#             await bot.send_message(chat_id=group["chat_id"], text=message)
+#             print(f"✅ Надіслано в групу {group['chat_id']}")
+#             sent = True
+#
+#     return sent
+
+
+# Глобальна змінна для контролю над надсиланням
+sent_today_date = None
+
 async def send_group_reminders(bot: Bot):
-    today = datetime.datetime.now()
-    tomorrow = today + datetime.timedelta(days=1)
+    global sent_today_date
+
+    today = datetime.datetime.now().date()
+    tomorrow = datetime.datetime.now() + datetime.timedelta(days=1)
     tomorrow_weekday = tomorrow.weekday()
 
     day = tomorrow.day
@@ -121,13 +151,24 @@ async def send_group_reminders(bot: Bot):
             print(f"✅ Надіслано в групу {group['chat_id']}")
             sent = True
 
+    if sent:
+        sent_today_date = today  # тут оновлюємо дату, якщо хоча б одне повідомлення надіслане
+
     return sent
 
 async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global sent_today_date
+
     user_id = update.effective_user.id
 
     if user_id != ALLOWED_USER_ID:
         await update.message.reply_text("🙃 Упс! Лише обрані мають силу керувати цим ботом Академії CONTACT 🤖")
+        return
+
+    today = datetime.datetime.now().date()
+
+    if sent_today_date == today:
+        await update.message.reply_text("ℹ️ Сьогодні нагадування вже були надіслані.")
         return
 
     sent = await send_group_reminders(context.bot)
@@ -136,6 +177,21 @@ async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("✅ Нагадування надіслано.")
     else:
         await update.message.reply_text("ℹ️ Сьогодні немає груп із запланованим повідомленням.")
+
+
+# async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     user_id = update.effective_user.id
+#
+#     if user_id != ALLOWED_USER_ID:
+#         await update.message.reply_text("🙃 Упс! Лише обрані мають силу керувати цим ботом Академії CONTACT 🤖")
+#         return
+#
+#     sent = await send_group_reminders(context.bot)
+#
+#     if sent:
+#         await update.message.reply_text("✅ Нагадування надіслано.")
+#     else:
+#         await update.message.reply_text("ℹ️ Сьогодні немає груп із запланованим повідомленням.")
 
 # локальний запуск
 # async def main():
