@@ -3,6 +3,8 @@ import random
 import asyncio
 from telegram import Bot, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+
 
 # 🔐 Token і дозвіл тільки для акаунту https://t.me/contact_academy
 
@@ -134,15 +136,37 @@ async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         await update.message.reply_text("ℹ️ Сьогодні немає груп із запланованим повідомленням.")
 
+# локальний запуск
+# async def main():
+#     app = ApplicationBuilder().token(BOT_TOKEN).build()
+#     app.add_handler(CommandHandler("start", handle_start_command))
+#     app.add_handler(CommandHandler("send", handle_send_command))
+#     app.add_handler(CommandHandler("getid", get_chat_id_handler))
+#     print("""🤖 Бот працює! Напиши /start або /send у Telegram.
+#     P.S За потреби запусти команду getid в чатах, щоб отримати id чату для додавання його до коду""")
+#     await app.run_polling()
 
+
+# запуск через вебхук на рендер
 async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).build()
+
+    # Додаємо твої хендлери тут...
     app.add_handler(CommandHandler("start", handle_start_command))
     app.add_handler(CommandHandler("send", handle_send_command))
     app.add_handler(CommandHandler("getid", get_chat_id_handler))
-    print("""🤖 Бот працює! Напиши /start або /send у Telegram. 
+    # app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    print("""🤖 Бот працює! Напиши /start або /send у Telegram.
     P.S За потреби запусти команду getid в чатах, щоб отримати id чату для додавання його до коду""")
-    await app.run_polling()
+
+    # WEBHOOK режим для Render:
+    PORT = int(os.environ.get('PORT', 8443))
+    await app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url="https://contact-telegram-bot.onrender.com/"  # <-- заміни на свою адресу Render!
+    )
 
 
 # Запуск з підтримкою активного loop
