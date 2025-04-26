@@ -1,9 +1,10 @@
+import os
+import asyncio
 import datetime
 import random
-import asyncio
+from dotenv import load_dotenv
 from telegram import Bot, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, MessageHandler, filters
 
 
 # 🔐 Token і дозвіл тільки для акаунту https://t.me/contact_academy
@@ -148,26 +149,51 @@ async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 # запуск через вебхук на рендер
+# async def main():
+#     app = Application.builder().token(BOT_TOKEN).build()
+#
+#     # Додаємо твої хендлери тут...
+#     app.add_handler(CommandHandler("start", handle_start_command))
+#     app.add_handler(CommandHandler("send", handle_send_command))
+#     app.add_handler(CommandHandler("getid", get_chat_id_handler))
+#     # app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+#
+#     print("""🤖 Бот працює! Напиши /start або /send у Telegram.
+#     P.S За потреби запусти команду getid в чатах, щоб отримати id чату для додавання його до коду""")
+#
+#     # WEBHOOK режим для Render:
+#     PORT = int(os.environ.get('PORT', 8443))
+#     await app.run_webhook(
+#         listen="0.0.0.0",
+#         port=PORT,
+#         webhook_url="https://contact-telegram-bot.onrender.com/"  # <-- заміни на свою адресу Render!
+#     )
+
+# сам визначає який зараз запуск локальний чи через сервер
 async def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # Додаємо твої хендлери тут...
+    # Додаємо хендлери
     app.add_handler(CommandHandler("start", handle_start_command))
     app.add_handler(CommandHandler("send", handle_send_command))
     app.add_handler(CommandHandler("getid", get_chat_id_handler))
-    # app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("""🤖 Бот працює! Напиши /start або /send у Telegram.
     P.S За потреби запусти команду getid в чатах, щоб отримати id чату для додавання його до коду""")
 
-    # WEBHOOK режим для Render:
-    PORT = int(os.environ.get('PORT', 8443))
-    await app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url="https://contact-telegram-bot.onrender.com/"  # <-- заміни на свою адресу Render!
-    )
-
+    # Перевіряємо середовище
+    if os.environ.get('RENDER') == 'true':
+        # Якщо ми на Render — запускаємо через WEBHOOK
+        PORT = int(os.environ.get('PORT', 8443))
+        RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
+        await app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=f"https://{RENDER_EXTERNAL_URL}/"
+        )
+    else:
+        # Інакше локально — запускаємо через POLLING
+        await app.run_polling()
 
 # Запуск з підтримкою активного loop
 import nest_asyncio
