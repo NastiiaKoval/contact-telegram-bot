@@ -57,7 +57,7 @@ groups = [
     {"chat_id": "-1001923361033", "weekday": 6, "lesson_time": "10:00"},  # тестовий
     {"chat_id": "-1002473135036", "weekday": 1, "lesson_time": "16:00"},  # ВТ 16:00
     {"chat_id": "-1002261828597", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10
-    # {"chat_id": "-1002214877213", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10
+    # {"chat_id": "-1002214877213", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10 граф диз
 
     # Четвер (3)
     {"chat_id": "-1002414786164", "weekday": 3, "lesson_time": "16:00"},  # ЧТ 16:00
