@@ -53,25 +53,27 @@ async def get_chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # 📅 Групи з розкладом
 groups = [
-    # Вівторок (1)
+    # Вівторок
     {"chat_id": "-1001923361033", "weekday": 6, "lesson_time": "10:00"},  # тестовий
     {"chat_id": "-1002473135036", "weekday": 1, "lesson_time": "16:00"},  # ВТ 16:00
     {"chat_id": "-1002261828597", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10
+    {"chat_id": "-1002742304131", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10 укр мова
     # {"chat_id": "-1002214877213", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10 граф диз
 
-    # Четвер (3)
+    # Четвер
     {"chat_id": "-1002414786164", "weekday": 3, "lesson_time": "16:00"},  # ЧТ 16:00
     {"chat_id": "-1001992761373", "weekday": 3, "lesson_time": "17:10"},  # ЧТ 17:10
     {"chat_id": "-1002858419719", "weekday": 3, "lesson_time": "18:00"},  # ЧТ 18:00
+    {"chat_id": "-1002742304131", "weekday": 3, "lesson_time": "17:10"},  # ЧТ 17:10 укр мова
 
-    # Субота (5)
+    # Субота
     {"chat_id": "-1001981833432", "weekday": 5, "lesson_time": "10:00"},  # СБ 10:00
     {"chat_id": "-1002170222087", "weekday": 5, "lesson_time": "11:15"},  # СБ 11:15
     {"chat_id": "-1002012663874", "weekday": 5, "lesson_time": "12:30"},  # СБ 12:30
     {"chat_id": "-1002021626621", "weekday": 5, "lesson_time": "15:00"},  # СБ 15:00
     {"chat_id": "-1002193917570", "weekday": 5, "lesson_time": "15:00"},  # СБ 15:00 (ігри)
 
-    # Неділя (6)
+    # Неділя
     {"chat_id": "-1002046960642", "weekday": 6, "lesson_time": "10:00"},  # НД 10:00
     {"chat_id": "-1002193782836", "weekday": 6, "lesson_time": "10:00"},  # НД 10:00 (анімація)
     {"chat_id": "-1002245783127", "weekday": 6, "lesson_time": "12:30"},  # НД 12:30 (3D-мод)
@@ -83,11 +85,11 @@ groups = [
 # Шаблон повідомлень
 greetings = [
     "Привітики, друзі! 🐼", "Привітики! 👋",
-    "Вітання, друзі! 😍", "Салют!✨", "Привіт! Як справи?🙂", "Добридень!☀️"
+    "Вітання, друзі! 😍", "Салют!✨", "Привіт! Як справи?🙂", "Добридень!☀️", "Усім привіт!🤗"
 ]
 bottoms = [
     "Бажаємо затишного дня!☕️", "Гарного дня та приємних несподіванок! 🎁",
-    "Бажаємо вдалого дня 🌟 ", "До зустрічі!💜", "Бажаємо приємного дня!🌻"
+    "Бажаємо вдалого дня 🌟 ", "До зустрічі!💜", "Бажаємо приємного дня!🌻", "Гарного дня!😋", "Вдалого дня!💫"
 ]
 stickers = ["📒", "😎", "👩‍🚀", "📚", "🍀", "🌈", '📌',
             '🌼', '⚡️', '👉', '👀', '🧑‍💻', '🐈', '😺', '🛋', '🎀', '🩵', '📘']
@@ -99,31 +101,6 @@ months_ukr = {
     5: "травня", 6: "червня", 7: "липня", 8: "серпня",
     9: "вересня", 10: "жовтня", 11: "листопада", 12: "грудня"
 }
-
-# Обробник команди send
-# async def send_group_reminders(bot: Bot):
-#     today = datetime.datetime.now()
-#     tomorrow = today + datetime.timedelta(days=1)
-#     tomorrow_weekday = tomorrow.weekday()
-#
-#     day = tomorrow.day
-#     month = months_ukr[tomorrow.month]
-#     tomorrow_str = f"{day} {month}"
-#
-#     sent = False
-#
-#     for group in groups:
-#         if group["weekday"] == tomorrow_weekday:
-#             message = (
-#                 f"{random.choice(greetings)}\n\n"
-#                 f"{random.choice(stickers)} Нагадуємо, що завтра, {tomorrow_str}, о {group['lesson_time']} ми чекаємо вас на занятті\n\n"
-#                 f"{random.choice(bottoms)}"
-#             )
-#             await bot.send_message(chat_id=group["chat_id"], text=message)
-#             print(f"✅ Надіслано в групу {group['chat_id']}")
-#             sent = True
-#
-#     return sent
 
 
 # Глобальна змінна для контролю над надсиланням
@@ -181,51 +158,6 @@ async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("ℹ️ Сьогодні немає груп із запланованим повідомленням.")
 
 
-# async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     user_id = update.effective_user.id
-#
-#     if user_id != ALLOWED_USER_ID:
-#         await update.message.reply_text("🙃 Упс! Лише обрані мають силу керувати цим ботом Академії CONTACT 🤖")
-#         return
-#
-#     sent = await send_group_reminders(context.bot)
-#
-#     if sent:
-#         await update.message.reply_text("✅ Нагадування надіслано.")
-#     else:
-#         await update.message.reply_text("ℹ️ Сьогодні немає груп із запланованим повідомленням.")
-
-# локальний запуск
-# async def main():
-#     app = ApplicationBuilder().token(BOT_TOKEN).build()
-#     app.add_handler(CommandHandler("start", handle_start_command))
-#     app.add_handler(CommandHandler("send", handle_send_command))
-#     app.add_handler(CommandHandler("getid", get_chat_id_handler))
-#     print("""🤖 Бот працює! Напиши /start або /send у Telegram.
-#     P.S За потреби запусти команду getid в чатах, щоб отримати id чату для додавання його до коду""")
-#     await app.run_polling()
-
-
-# запуск через вебхук на рендер
-# async def main():
-#     app = Application.builder().token(BOT_TOKEN).build()
-#
-#     # Додаємо твої хендлери тут...
-#     app.add_handler(CommandHandler("start", handle_start_command))
-#     app.add_handler(CommandHandler("send", handle_send_command))
-#     app.add_handler(CommandHandler("getid", get_chat_id_handler))
-#     # app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-#
-#     print("""🤖 Бот працює! Напиши /start або /send у Telegram.
-#     P.S За потреби запусти команду getid в чатах, щоб отримати id чату для додавання його до коду""")
-#
-#     # WEBHOOK режим для Render:
-#     PORT = int(os.environ.get('PORT', 8443))
-#     await app.run_webhook(
-#         listen="0.0.0.0",
-#         port=PORT,
-#         webhook_url="https://contact-telegram-bot.onrender.com/"  # <-- заміни на свою адресу Render!
-#     )
 
 # сам визначає який зараз запуск локальний чи через сервер
 async def main():
