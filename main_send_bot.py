@@ -71,12 +71,12 @@ groups = [
     {"chat_id": "-1002170222087", "weekday": 5, "lesson_time": "11:15"},  # СБ 11:15
     {"chat_id": "-1002012663874", "weekday": 5, "lesson_time": "12:30"},  # СБ 12:30
     {"chat_id": "-1002021626621", "weekday": 5, "lesson_time": "15:00"},  # СБ 15:00
-    {"chat_id": "-1002193917570", "weekday": 5, "lesson_time": "15:00"},  # СБ 15:00 (ігри)
+    # {"chat_id": "-1002193917570", "weekday": 5, "lesson_time": "15:00"},  # СБ 15:00 (ігри)
 
     # Неділя
-    {"chat_id": "-1002046960642", "weekday": 6, "lesson_time": "10:00"},  # НД 10:00
-    {"chat_id": "-1002193782836", "weekday": 6, "lesson_time": "10:00"},  # НД 10:00 (анімація)
-    {"chat_id": "-1002245783127", "weekday": 6, "lesson_time": "12:30"},  # НД 12:30 (3D-мод)
+    {"chat_id": "-1002046960642", "weekday": 6, "lesson_time": "10:00"},  # НД 10:00 хш
+    # {"chat_id": "-1002193782836", "weekday": 6, "lesson_time": "10:00"},  # НД 10:00 (анімація)
+    # {"chat_id": "-1002245783127", "weekday": 6, "lesson_time": "12:30"},  # НД 12:30 (3D-мод)
     {"chat_id": "-1001953194411", "weekday": 6, "lesson_time": "12:30"},  # НД 12:30
     {"chat_id": "-1001722600792", "weekday": 6, "lesson_time": "15:00"},  # НД 15:00
     {"chat_id": "-1001722769204", "weekday": 6, "lesson_time": "17:30"},  # НД 17:30
@@ -172,18 +172,30 @@ async def main():
     P.S За потреби запусти команду getid в чатах, щоб отримати id чату для додавання його до коду""")
 
     # Перевіряємо середовище
-    if os.environ.get('RENDER') == 'true':
-        # Якщо ми на Render — запускаємо через WEBHOOK
+    # if os.environ.get('RENDER') == 'true':
+    #     # Якщо ми на Render — запускаємо через WEBHOOK
+    #     PORT = int(os.environ.get('PORT', 8443))
+    #     RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
+    #     await app.run_webhook(
+    #         listen="0.0.0.0",
+    #         port=PORT,
+    #         webhook_url="https://contact-telegram-bot.onrender.com"
+    #     )
+
+    if os.environ.get('PORT'):
         PORT = int(os.environ.get('PORT', 8443))
-        RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
+        webhook_url = os.environ.get('RENDER_EXTERNAL_URL', 'https://contact-telegram-bot.onrender.com')
         await app.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            webhook_url="https://contact-telegram-bot.onrender.com"
+            webhook_url=webhook_url
         )
     else:
-        # Інакше локально — запускаємо через POLLING
         await app.run_polling()
+
+    # else:
+    #     # Інакше локально — запускаємо через POLLING
+    #     await app.run_polling()
 
 # Запуск з підтримкою активного loop
 import nest_asyncio
