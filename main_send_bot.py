@@ -207,11 +207,14 @@ async def main():
     #     await app.run_polling()
 
 # Запуск з підтримкою активного loop
-import nest_asyncio
-nest_asyncio.apply()
+# import nest_asyncio
+# nest_asyncio.apply()
+#
+# if __name__ == "__main__":
+#     asyncio.run(main())
 
 if __name__ == "__main__":
+    import asyncio
     asyncio.run(main())
-
 
 
