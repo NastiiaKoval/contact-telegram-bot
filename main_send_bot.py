@@ -55,13 +55,12 @@ groups = [
     # Вівторок
     {"chat_id": "-1001923361033", "weekday": 6, "lesson_time": "10:00"},  # тестовий
     {"chat_id": "-1002473135036", "weekday": 1, "lesson_time": "16:00"},  # ВТ 16:00
-    {"chat_id": "-1002261828597", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10 Художня школа
+    {"chat_id": "-1002261828597", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10 ХШ
     {"chat_id": "-1002742304131", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10 укр мова
-    # {"chat_id": "-1002214877213", "weekday": 1, "lesson_time": "17:10"},  # ВТ 17:10 граф диз
 
     # Четвер
     {"chat_id": "-1002414786164", "weekday": 3, "lesson_time": "16:00"},  # ЧТ 16:00
-    {"chat_id": "-1001992761373", "weekday": 3, "lesson_time": "17:10"},  # ЧТ 17:10
+    # {"chat_id": "-1001992761373", "weekday": 3, "lesson_time": "17:10"},  # ЧТ 17:10
     {"chat_id": "-1002836591453", "weekday": 3, "lesson_time": "17:15"},  # ЧТ 17:15
     {"chat_id": "-1002858419719", "weekday": 3, "lesson_time": "18:00"},  # ЧТ 18:00
     {"chat_id": "-1002742304131", "weekday": 3, "lesson_time": "17:10"},  # ЧТ 17:10 укр мова
@@ -87,7 +86,6 @@ groups = [
     {"chat_id": "-1003081618742", "weekday": 6, "lesson_time": "12:30"},  # НД 12:30 Програмування Pro (Краків)
     {"chat_id": "-1001953194411", "weekday": 6, "lesson_time": "12:30"},  # НД 12:30
     {"chat_id": "-1001722600792", "weekday": 6, "lesson_time": "15:00"},  # НД 15:00
-    {"chat_id": "-1002014522461", "weekday": 6, "lesson_time": "15:00"},  # НД 15:00 Робототехніка (Краків)
     {"chat_id": "-1003098981588", "weekday": 6, "lesson_time": "15:00"},  # НД 15:00 IT-Start 2.0 (Краків)
     {"chat_id": "-1001722769204", "weekday": 6, "lesson_time": "17:30"},  # НД 17:30
 ]
