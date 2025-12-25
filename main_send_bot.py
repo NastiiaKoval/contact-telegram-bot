@@ -17,6 +17,7 @@ load_dotenv()  # Завантажуємо .env
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ALLOWED_USER_ID = int(os.getenv('ALLOWED_USER_ID'))  # перетворюємо в int, бо ID число
 
+waiting_for_send_all_message = False
 
 # Обробник команди start
 async def handle_start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -87,7 +88,7 @@ groups = [
     {"chat_id": "-1001953194411", "weekday": 6, "lesson_time": "12:30"},  # НД 12:30
     {"chat_id": "-1001722600792", "weekday": 6, "lesson_time": "15:00"},  # НД 15:00
     {"chat_id": "-1003098981588", "weekday": 6, "lesson_time": "15:00"},  # НД 15:00 IT-Start 2.0 (Краків)
-    {"chat_id": "-1001722769204", "weekday": 6, "lesson_time": "17:30"},  # НД 17:30
+    {"chat_id": "-1001722769204", "weekday": 6, "lesson_time": "17:30"}  # НД 17:30
 ]
 
 
@@ -167,6 +168,59 @@ async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("ℹ️ Сьогодні немає груп із запланованим повідомленням.")
 
 
+# команда для розсилки всім наявним чатам в groups
+async def handle_send_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global waiting_for_send_all_message
+
+    user_id = update.effective_user.id
+
+    if user_id != ALLOWED_USER_ID:
+        await update.message.reply_text(
+            "🙃 Упс! Лише обрані мають силу керувати цим ботом Академії CONTACT 🤖"
+        )
+        return
+
+    waiting_for_send_all_message = True
+
+    await update.message.reply_text(
+        "✍️ Напиши повідомлення, яке хочеш розіслати в усі групи 📩"
+    )
+
+async def handle_send_all_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global waiting_for_send_all_message
+
+    if not waiting_for_send_all_message:
+        return
+
+    user_id = update.effective_user.id
+    if user_id != ALLOWED_USER_ID:
+        return
+
+    waiting_for_send_all_message = False
+
+    source_message = update.message
+
+    # ⏱️ Даємо Telegram стабілізувати custom emoji
+    await asyncio.sleep(1)
+
+    sent_count = 0
+
+    for group in groups:
+        try:
+            await context.bot.copy_message(
+                chat_id=group["chat_id"],
+                from_chat_id=source_message.chat.id,
+                message_id=source_message.message_id
+            )
+            sent_count += 1
+        except Exception as e:
+            print(f"❌ Не вдалося надіслати в {group['chat_id']}: {e}")
+
+    await update.message.reply_text(
+        f"✅ Повідомлення надіслано в {sent_count} груп(и)."
+    )
+
+
 
 # сам визначає який зараз запуск локальний чи через сервер
 async def main():
@@ -176,6 +230,10 @@ async def main():
     app.add_handler(CommandHandler("start", handle_start_command))
     app.add_handler(CommandHandler("send", handle_send_command))
     app.add_handler(CommandHandler("getid", get_chat_id_handler))
+    app.add_handler(CommandHandler("send_all", handle_send_all))
+    app.add_handler(
+        MessageHandler(filters.ALL & ~filters.COMMAND, handle_send_all_message)
+    )
 
     print("""🤖 Бот працює! Напиши /start або /send у Telegram.
     P.S За потреби запусти команду getid в чатах, щоб отримати id чату для додавання його до коду""")
