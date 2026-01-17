@@ -22,7 +22,8 @@ ALLOWED_USER_ID = int(os.getenv('ALLOWED_USER_ID'))  # перетворюємо 
 
 waiting_for_send_all_message = False
 
-def read_schedule_from_sheet():
+# Підключення до клієнта
+def get_gspread_client():
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
@@ -30,17 +31,19 @@ def read_schedule_from_sheet():
 
     creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     if not creds_json:
-        raise RuntimeError("GOOGLE_CREDENTIALS_JSON is not set in environment variables")
+        raise RuntimeError("GOOGLE_CREDENTIALS_JSON is not set")
 
     creds_dict = json.loads(creds_json)
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 
-    client = gspread.authorize(creds)
+    return gspread.authorize(creds)
 
-    # Назва або ID таблиці
-    sheet_schedule = client.open("groups_schedule").sheet1
-    records = sheet_schedule.get_all_records()
-    return records
+# Зчитування потрібної таблиці
+def read_schedule_from_sheet():
+    client = get_gspread_client()
+    sheet = client.open("groups_schedule").sheet1
+    return sheet.get_all_records()
+
 
 async def handle_start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -74,51 +77,42 @@ weekday_map = {
     "ПН": 0, "ВТ": 1, "СР": 2, "ЧТ": 3, "ПТ": 4, "СБ": 5, "НД": 6
 }
 
-# Додає новий рядок у таблицю, якщо ще немає
+# Додає новий рядок у таблицю груп, якщо ще немає
 def append_new_group_if_not_exists(chat_id, group_name):
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
-             "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-    client = gspread.authorize(creds)
+    client = get_gspread_client()
     sheet = client.open("groups_schedule").sheet1
+
     existing_records = sheet.get_all_records()
-    existing_chat_ids = [str(row["chat_id"]) for row in existing_records]
+    existing_chat_ids = {str(row["chat_id"]) for row in existing_records}
 
     if str(chat_id) in existing_chat_ids:
         print(f"ℹ️ Chat ID {chat_id} вже є в таблиці.")
         return
 
-    weekday = None
-    lesson_time = None
-
+    # --- парсинг ---
     try:
-        # Дістаємо текст у дужках
         match = re.search(r"\((.*?)\)", group_name)
         if not match:
             raise ValueError("Немає дужок")
 
         content = match.group(1).strip()
 
-        # ВАРІАНТ 1: "СБ, 12:30"
         if "," in content:
             day_part, time_part = map(str.strip, content.split(","))
-        # ВАРІАНТ 2: "СБ 16:00"
         else:
             parts = content.split()
-            if len(parts) == 2:
-                day_part, time_part = parts
-            else:
+            if len(parts) != 2:
                 raise ValueError("Невідомий формат")
+            day_part, time_part = parts
 
         weekday = weekday_map.get(day_part.upper())
         lesson_time = time_part
 
+        if weekday is None:
+            raise ValueError("Невідомий день тижня")
+
     except Exception as e:
         print(f"⚠️ Не вдалося розпарсити '{group_name}': {e}")
-        return
-
-    if weekday is None or lesson_time is None:
-        print("❌ Дані неповні — рядок не буде додано.")
         return
 
     new_row = [
@@ -132,6 +126,7 @@ def append_new_group_if_not_exists(chat_id, group_name):
 
     sheet.append_row(new_row)
     print(f"✅ Додано нову групу: {group_name}")
+
 
 # Обробник команди getid
 async def get_chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
