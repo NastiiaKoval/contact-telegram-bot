@@ -5,8 +5,10 @@ from dotenv import load_dotenv
 from telegram import Bot, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, MessageHandler, filters
 import gspread
+import os, json
 from oauth2client.service_account import ServiceAccountCredentials
 import re
+
 
 # 🔐 Token і дозвіл тільки для акаунту https://t.me/contact_academy
 
@@ -20,12 +22,19 @@ ALLOWED_USER_ID = int(os.getenv('ALLOWED_USER_ID'))  # перетворюємо 
 
 waiting_for_send_all_message = False
 
-
 def read_schedule_from_sheet():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
-             "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
 
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    if not creds_json:
+        raise RuntimeError("GOOGLE_CREDENTIALS_JSON is not set in environment variables")
+
+    creds_dict = json.loads(creds_json)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+
     client = gspread.authorize(creds)
 
     # Назва або ID таблиці
