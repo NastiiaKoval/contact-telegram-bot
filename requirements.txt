@@ -2,3 +2,6 @@ python-telegram-bot[webhooks]==21.1
 nest-asyncio==1.5.8
 Babel==2.14.0
 python-dotenv
+gspread
+oauth2client
+
