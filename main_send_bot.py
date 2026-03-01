@@ -148,6 +148,7 @@ async def get_chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Спроба додати в таблицю
     append_new_group_if_not_exists(chat_id, chat_title)
 
+# Шаблони ддя повідомлень
 greetings = [
     "Привітики, друзі! 🐼", "Привітики! 👋", "Хеей!😋",
     "Вітання, друзі! 😍", "Салют!✨", "Привіт! Як справи?🙂", "Добридень!☀️", "Усім привіт!🤗"
@@ -159,19 +160,17 @@ endings = [
 stickers = ["📒", "😎", "👩‍🚀", "📚", "🍀", "🌈", '📌',
             '🌼', '⚡️', '👉', '👀', '🧑‍💻', '🐈', '😺', '🛋', '🎀', '🩵', '📘']
 
-
-# 📬 Надсилання нагадувань
 months_ukr = {
     1: "січня", 2: "лютого", 3: "березня", 4: "квітня",
     5: "травня", 6: "червня", 7: "липня", 8: "серпня",
     9: "вересня", 10: "жовтня", 11: "листопада", 12: "грудня"
 }
 
-groups = read_schedule_from_sheet()
-
 # Глобальна змінна для контролю над надсиланням
 sent_today_date = None
 
+# 📬 Надсилання нагадувань
+groups = read_schedule_from_sheet()
 async def send_group_reminders(bot: Bot):
     global sent_today_date
 
@@ -294,15 +293,68 @@ async def handle_send_all_message(update: Update, context: ContextTypes.DEFAULT_
         f"✅ Повідомлення надіслано в {sent_count} груп(и)."
     )
 
+async def send_today_reminders(bot: Bot):
+    today_datetime = datetime.datetime.now()
+    today = today_datetime.date()
+    today_weekday = today_datetime.weekday()
 
+    day = today_datetime.day
+    month = months_ukr[today_datetime.month]
+    today_str = f"{day} {month}"
 
-# сам визначає який зараз запуск локальний чи через сервер
+    sent = False
+
+    for group in groups:
+        chat_id = group["chat_id"]
+        weekday = int(group["weekday"])
+        lesson_time = group["lesson_time"]
+        zoom = group.get("zoom_link")
+        gdrive = group.get("materials_link")
+
+        greeting = random.choice(greetings)
+        ending = random.choice(endings)
+        stiker = random.choice(stickers)
+
+        if weekday == today_weekday:
+            message = (
+                f"{greeting}\n\n"
+                f"{stiker}Нагадуємо, що сьогодні, {today_str}, о {lesson_time} ми чекаємо вас на занятті"
+            )
+
+            if zoom:
+                message += f"\n\n🔗 Посилання для підключення – {zoom}"
+            if gdrive:
+                message += f"\n\n🔹 Матеріали занять – {gdrive}"
+
+            message += f"\n\n{ending}"
+
+            await bot.send_message(chat_id=chat_id, text=message)
+            print(f"✅ Надіслано сьогодні в групу {chat_id}")
+            sent = True
+
+    return sent
+
+async def handle_send_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    if user_id != ALLOWED_USER_ID:
+        await update.message.reply_text("🙃 Доступ заборонено")
+        return
+
+    sent = await send_today_reminders(context.bot)
+
+    if sent:
+        await update.message.reply_text("✅ Нагадування на сьогодні надіслано.")
+    else:
+        await update.message.reply_text("ℹ️ Сьогодні немає груп.")
+
 async def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     # Додаємо хендлери
     app.add_handler(CommandHandler("start", handle_start_command))
     app.add_handler(CommandHandler("send", handle_send_command))
+    app.add_handler(CommandHandler("send_today_reminders", handle_send_today))
     app.add_handler(CommandHandler("getid", get_chat_id_handler))
     app.add_handler(CommandHandler("send_all", handle_send_all))
     app.add_handler(
