@@ -173,7 +173,7 @@ sent_today_date = None
 groups = read_schedule_from_sheet()
 async def send_group_reminders(bot: Bot):
     global sent_today_date
-     groups = read_schedule_from_sheet()
+    groups = read_schedule_from_sheet()
 
     today = datetime.datetime.now().date()
     tomorrow = datetime.datetime.now() + datetime.timedelta(days=1)
