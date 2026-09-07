@@ -173,6 +173,7 @@ sent_today_date = None
 groups = read_schedule_from_sheet()
 async def send_group_reminders(bot: Bot):
     global sent_today_date
+     groups = read_schedule_from_sheet()
 
     today = datetime.datetime.now().date()
     tomorrow = datetime.datetime.now() + datetime.timedelta(days=1)
@@ -209,9 +210,13 @@ async def send_group_reminders(bot: Bot):
 
             message += f"\n\n{ending}"
 
-            await bot.send_message(chat_id=chat_id, text=message)
-            print(f"✅ Надіслано в групу {group['chat_id']}")
-            sent = True
+            try:
+                await bot.send_message(chat_id=chat_id, text=message)
+                print(f"✅ Надіслано в групу {chat_id}")
+                sent = True
+            except Exception as e:
+                print(f"❌ Не вдалося надіслати в {chat_id}: {e}")
+                continue
 
     if sent:
         sent_today_date = today  # тут оновлюємо дату, якщо хоча б одне повідомлення надіслане
@@ -220,6 +225,7 @@ async def send_group_reminders(bot: Bot):
 
 async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global sent_today_date
+    groups = read_schedule_from_sheet()
 
     user_id = update.effective_user.id
 
@@ -244,6 +250,7 @@ async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 # команда для розсилки всім наявним чатам в groups
 async def handle_send_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global waiting_for_send_all_message
+    groups = read_schedule_from_sheet()
 
     user_id = update.effective_user.id
 
@@ -261,6 +268,7 @@ async def handle_send_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_send_all_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global waiting_for_send_all_message
+    groups = read_schedule_from_sheet()
 
     if not waiting_for_send_all_message:
         return
@@ -294,6 +302,7 @@ async def handle_send_all_message(update: Update, context: ContextTypes.DEFAULT_
     )
 
 async def send_today_reminders(bot: Bot):
+    groups = read_schedule_from_sheet()
     today_datetime = datetime.datetime.now()
     today = today_datetime.date()
     today_weekday = today_datetime.weekday()
