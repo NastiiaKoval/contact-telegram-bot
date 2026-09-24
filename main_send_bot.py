@@ -357,7 +357,7 @@ async def handle_send_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("ℹ️ Сьогодні немає груп.")
 
-async def main():
+def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     # Додаємо хендлери
@@ -377,21 +377,14 @@ async def main():
     if os.environ.get('PORT'):
         PORT = int(os.environ.get('PORT', 8443))
         webhook_url = os.environ.get('RENDER_EXTERNAL_URL', 'https://contact-telegram-bot.onrender.com')
-        await app.run_webhook(
+        app.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             webhook_url=webhook_url
         )
     else:
-        await app.run_polling()
+        app.run_polling()
 
-
-import nest_asyncio
-import asyncio
-
-nest_asyncio.apply()
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
-
+    main()
