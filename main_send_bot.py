@@ -8,19 +8,37 @@ import gspread
 import os, json
 from oauth2client.service_account import ServiceAccountCredentials
 import re
+from openai import OpenAI
 
+# nest_asyncio потрібен тільки для локального запуску (polling) на Python 3.10+
+# На Render (webhook) він не використовується
+if not os.environ.get("PORT"):
+    import nest_asyncio
+    nest_asyncio.apply()
 
 # 🔐 Token і дозвіл тільки для акаунту https://t.me/contact_academy
-
-import os
-from dotenv import load_dotenv
 
 load_dotenv()  # Завантажуємо .env
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ALLOWED_USER_ID = int(os.getenv('ALLOWED_USER_ID'))  # перетворюємо в int, бо ID число
+ADMIN_CHAT_ID = ALLOWED_USER_ID  # для нових команд
+
+# Нові змінні для LLM-функцій (тільки тестові групи)
+TEST_GROUP_IDS = {int(x) for x in os.getenv("TEST_GROUP_IDS", "").split(",") if x.strip()}
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Ліміт викликів LLM на користувача (в пам’яті, скидається при рестарті)
+user_llm_calls = {}  # user_id -> count today
+MAX_LLM_CALLS_PER_USER = 3
 
 waiting_for_send_all_message = False
+
+# OpenAI клієнт (створюємо тільки якщо ключ є)
+openai_client = None
+if OPENAI_API_KEY:
+    openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
 
 # Підключення до клієнта
 def get_gspread_client():
@@ -357,10 +375,155 @@ async def handle_send_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("ℹ️ Сьогодні немає груп.")
 
+
+# ==================== LLM FEATURES (тільки тестові групи) ====================
+
+def get_diverse_it_fact():
+    """Генерує випадковий цікавий факт про IT українською для дітей."""
+    if not openai_client:
+        return "⚠️ OpenAI ключ не налаштовано."
+
+    topics = [
+        "cybersecurity and staying safe online",
+        "robotics and how robots work",
+        "game development and how video games are made",
+        "artificial intelligence and future tech",
+        "how the internet actually works (cables, servers, etc.)",
+        "3d-visualizations or modeling",
+        "3d animation",
+        "graphic design"
+    ]
+    styles = [
+        "a fun and educational fact",
+        "a short and funny story",
+        "an amazing 'did you know' fact",
+        "a simple explanation of a complex concept",
+        "interesting facts for children on IT topic"
+    ]
+
+    topic = random.choice(topics)
+    style = random.choice(styles)
+
+    prompt = f"Tell {style} about {topic} for children aged 10–14. Your response MUST be in Ukrainian language. Add emoji. Start with a new sentence, do not answer the prompt directly."
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Ти — дружній IT-помічник, який пояснює складні технології дітям простою та цікавою українською мовою."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.8
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"OpenAI error: {e}")
+        return "❌ Не вдалося згенерувати факт. Спробуй пізніше."
+
+
+def get_coding_game():
+    """Генерує просту логічну задачу / гру з кодом для дітей."""
+    if not openai_client:
+        return "⚠️ OpenAI ключ не налаштовано.", None
+
+    prompt = """Create a simple and fun coding or logic puzzle for children aged 10-14 about programming.
+Make it interactive: give a short problem, then ask a question.
+At the end, on a new line, write the correct answer in the format: ANSWER: <correct answer>
+The whole response MUST be in Ukrainian. Add some emoji. Keep it short and engaging."""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Ти — веселий учитель програмування для дітей. Створюй прості, цікаві задачі українською."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7
+        )
+        full = response.choices[0].message.content
+        # Спроба відокремити відповідь
+        if "ANSWER:" in full:
+            parts = full.split("ANSWER:")
+            question = parts[0].strip()
+            answer = parts[1].strip()
+            return question, answer
+        return full, None
+    except Exception as e:
+        print(f"OpenAI game error: {e}")
+        return "❌ Не вдалося згенерувати гру. Спробуй пізніше.", None
+
+
+# Просте сховище очікуваних відповідей на гру (user_id -> correct_answer)
+pending_game_answers = {}
+
+
+async def check_llm_access(update: Update) -> bool:
+    """Перевірка: чи це тестова група + ліміт викликів."""
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    if chat_id not in TEST_GROUP_IDS:
+        await update.message.reply_text("🚫 Ця команда доступна тільки в тестових групах.")
+        return False
+
+    # Ліміт
+    today = datetime.date.today()
+    key = (user_id, today)
+    count = user_llm_calls.get(key, 0)
+    if count >= MAX_LLM_CALLS_PER_USER:
+        await update.message.reply_text(f"⏳ Ліміт {MAX_LLM_CALLS_PER_USER} викликів на сьогодні вичерпано. Спробуй завтра!")
+        return False
+
+    user_llm_calls[key] = count + 1
+    return True
+
+
+async def handle_interest_fact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_llm_access(update):
+        return
+
+    await update.message.reply_text("🤔 Генерую цікавий факт...")
+    fact = get_diverse_it_fact()
+    await update.message.reply_text(fact)
+
+
+async def handle_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_llm_access(update):
+        return
+
+    await update.message.reply_text("🎮 Генерую гру...")
+    question, answer = get_coding_game()
+    if answer:
+        pending_game_answers[update.effective_user.id] = answer
+        await update.message.reply_text(question + "\n\n✍️ Напиши свою відповідь командою /game_answer <відповідь>")
+    else:
+        await update.message.reply_text(question)
+
+
+async def handle_game_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_llm_access(update):
+        return
+
+    user_id = update.effective_user.id
+    if user_id not in pending_game_answers:
+        await update.message.reply_text("Спочатку згенеруй гру командою /game")
+        return
+
+    user_answer = " ".join(context.args).strip().lower() if context.args else ""
+    correct = pending_game_answers[user_id].lower()
+
+    if user_answer and user_answer in correct or correct in user_answer:
+        await update.message.reply_text("✅ Правильно! Молодець! 🎉")
+    else:
+        await update.message.reply_text(f"❌ Не зовсім. Правильна відповідь: {pending_game_answers[user_id]}")
+
+    del pending_game_answers[user_id]
+
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # Додаємо хендлери
+    # Старі хендлери (не чіпаємо)
     app.add_handler(CommandHandler("start", handle_start_command))
     app.add_handler(CommandHandler("send", handle_send_command))
     app.add_handler(CommandHandler("send_today_reminders", handle_send_today))
@@ -369,6 +532,11 @@ def main():
     app.add_handler(
         MessageHandler(filters.ALL & ~filters.COMMAND, handle_send_all_message)
     )
+
+    # Нові LLM-хендлери (тільки тестові групи)
+    app.add_handler(CommandHandler("interest_fact", handle_interest_fact))
+    app.add_handler(CommandHandler("game", handle_game))
+    app.add_handler(CommandHandler("game_answer", handle_game_answer))
 
     print("""🤖 Бот працює! Напиши /start або /send у Telegram.
     P.S За потреби запусти команду getid в чатах, щоб отримати id чату для додавання його до коду""")
