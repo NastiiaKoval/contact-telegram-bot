@@ -2,8 +2,8 @@ import asyncio
 import datetime
 import random
 from dotenv import load_dotenv
-from telegram import Bot, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, MessageHandler, filters
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, MessageHandler, filters, CallbackQueryHandler
 import gspread
 import os, json
 from oauth2client.service_account import ServiceAccountCredentials
@@ -16,13 +16,15 @@ if not os.environ.get("PORT"):
     import nest_asyncio
     nest_asyncio.apply()
 
+
 # 🔐 Token і дозвіл тільки для акаунту https://t.me/contact_academy
 
 load_dotenv()  # Завантажуємо .env
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-ALLOWED_USER_ID = int(os.getenv('ALLOWED_USER_ID'))  # перетворюємо в int, бо ID число
-ADMIN_CHAT_ID = ALLOWED_USER_ID  # для нових команд
+# Підтримка кількох адмінів через кому: ALLOWED_USER_ID=123,456
+ALLOWED_USER_IDS = {int(x) for x in os.getenv('ALLOWED_USER_ID', '').split(',') if x.strip()}
+ADMIN_CHAT_IDS = ALLOWED_USER_IDS  # для зручності
 
 # Нові змінні для LLM-функцій (тільки тестові групи)
 TEST_GROUP_IDS = {int(x) for x in os.getenv("TEST_GROUP_IDS", "").split(",") if x.strip()}
@@ -66,12 +68,22 @@ def read_schedule_from_sheet():
 async def handle_start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    if user_id != ALLOWED_USER_ID:
+    if user_id not in ALLOWED_USER_IDS:
         await update.message.reply_text("🙃 Упс! Лише обрані мають силу керувати цим ботом Академії CONTACT 🤖.")
         return
 
+    # Клавіатура тільки для адміна
+    keyboard = [
+        [
+            InlineKeyboardButton("📊 Звіт відвідуваності", callback_data="attendance_report"),
+            InlineKeyboardButton("📝 Звіт домашніх завдань", callback_data="homework_menu"),
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
-        "👋 Вітаю, зробимо сьогодні нагадування?\nЯкщо так — натискай команду /send"
+        "👋 Вітаю, зробимо сьогодні нагадування?\nЯкщо так — натискай команду /send",
+        reply_markup=reply_markup
     )
 
     # 👉 Виводимо в термінал список груп, яким буде надіслано нагадування
@@ -150,7 +162,7 @@ def append_new_group_if_not_exists(chat_id, group_name):
 async def get_chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    if user_id != ALLOWED_USER_ID:
+    if user_id not in ALLOWED_USER_IDS:
         await update.message.reply_text("🙃 Упс! Лише обрані мають силу керувати цим ботом Академії CONTACT 🤖.")
         return
 
@@ -158,9 +170,9 @@ async def get_chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     chat_title = chat.title or chat.full_name or "Без назви"
     chat_id = chat.id
 
-    # Надсилаємо тобі особисто
+    # Надсилаємо тобі особисто (першому адміну)
     await context.bot.send_message(
-        chat_id=ALLOWED_USER_ID,
+        chat_id=next(iter(ALLOWED_USER_IDS)),
         text=f"🔍 Назва чату: {chat_title}\n🆔 Chat ID: {chat_id}"
     )
     # Спроба додати в таблицю
@@ -247,7 +259,7 @@ async def handle_send_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     user_id = update.effective_user.id
 
-    if user_id != ALLOWED_USER_ID:
+    if user_id not in ALLOWED_USER_IDS:
         await update.message.reply_text("🙃 Упс! Лише обрані мають силу керувати цим ботом Академії CONTACT 🤖")
         return
 
@@ -272,7 +284,7 @@ async def handle_send_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
 
-    if user_id != ALLOWED_USER_ID:
+    if user_id not in ALLOWED_USER_IDS:
         await update.message.reply_text(
             "🙃 Упс! Лише обрані мають силу керувати цим ботом Академії CONTACT 🤖"
         )
@@ -292,7 +304,7 @@ async def handle_send_all_message(update: Update, context: ContextTypes.DEFAULT_
         return
 
     user_id = update.effective_user.id
-    if user_id != ALLOWED_USER_ID:
+    if user_id not in ALLOWED_USER_IDS:
         return
 
     waiting_for_send_all_message = False
@@ -364,7 +376,7 @@ async def send_today_reminders(bot: Bot):
 async def handle_send_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    if user_id != ALLOWED_USER_ID:
+    if user_id not in ALLOWED_USER_IDS:
         await update.message.reply_text("🙃 Доступ заборонено")
         return
 
@@ -520,8 +532,201 @@ async def handle_game_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     del pending_game_answers[user_id]
 
 
+# ==================== ATTENDANCE REPORT ====================
+
+def parse_sheet_name(sheet_title: str):
+    """Парсить назву вкладки: Предмет/День/Час/Викладач"""
+    parts = [p.strip() for p in sheet_title.split("/")]
+    if len(parts) >= 4:
+        return {
+            "subject": parts[0],
+            "day": parts[1],
+            "time": parts[2],
+            "teacher": parts[3],
+        }
+    return {"subject": sheet_title, "day": "", "time": "", "teacher": ""}
+
+
+def get_student_rows(values):
+    return [r for r in values[1:] if len(r) > 1 and r[1].strip()]
+
+
+def held_lessons(headers, rows):
+    """Індекси колонок дат, де вже є хоч одна відмітка (заняття відбулося)."""
+    held = []
+    for idx, h in enumerate(headers):
+        if re.fullmatch(r"\d{1,2}\.\d{1,2}", str(h).strip()):
+            if any(len(r) > idx and str(r[idx]).strip().upper() == "TRUE" for r in rows):
+                held.append(idx)
+    return held
+
+
+def get_attendance_summary():
+    """Збирає звіт по відвідуваності за останнє заняття по всіх групах."""
+    try:
+        client = get_gspread_client()
+        spreadsheet = client.open("attendance")
+    except Exception as e:
+        return f"❌ Не вдалося відкрити таблицю attendance: {e}"
+
+    lines = ["📊 Звіт відвідуваності (останнє заняття)\n"]
+    total_present = 0
+    total_students = 0
+
+    for ws in spreadsheet.worksheets():
+        meta = parse_sheet_name(ws.title)
+        values = ws.get_all_values()
+        if not values or len(values) < 2:
+            continue
+
+        headers = values[0]
+        rows = get_student_rows(values)
+        held = held_lessons(headers, rows)
+        if not held:
+            continue
+
+        last_date_col = held[-1]
+
+        present = 0
+        students = len(rows)
+
+        for row in rows:
+            if len(row) > last_date_col and str(row[last_date_col]).strip().upper() == "TRUE":
+                present += 1
+
+        if students == 0:
+            continue
+
+        total_present += present
+        total_students += students
+
+        percent = present / students
+        icon = "✅" if percent >= 0.8 else "⚠️" if percent >= 0.5 else "❌"
+        group_label = f"{meta['subject']} {meta['time']}"
+        lines.append(f"{group_label} – {icon} {present} / {students} присутніх")
+
+    if total_students > 0:
+        overall = round(total_present / total_students * 100)
+        lines.append(f"\nOverall attendance: {overall}%")
+    else:
+        lines.append("\nНемає даних для звіту.")
+
+    return "\n".join(lines)
+
+
+async def get_homework_report_for_group(sheet_title: str) -> tuple[str, list]:
+    """Звіт по домашках за останні 3 заняття + список дітей з низьким результатом."""
+    try:
+        client = get_gspread_client()
+        spreadsheet = client.open("attendance")
+        ws = spreadsheet.worksheet(sheet_title)
+    except Exception as e:
+        return f"❌ Не вдалося відкрити вкладку: {e}", []
+
+    values = ws.get_all_values()
+    if not values or len(values) < 2:
+        return "Немає даних у цій групі.", []
+
+    headers = values[0]
+    rows = get_student_rows(values)
+    held = held_lessons(headers, rows)
+
+    # колонка «дз» іде одразу після колонки дати
+    last_3_hw = [i + 1 for i in held[-3:]
+                 if i + 1 < len(headers) and str(headers[i + 1]).strip().lower() == "дз"]
+    if not last_3_hw:
+        return "Не знайдено колонок з домашками.", []
+
+    meta = parse_sheet_name(sheet_title)
+    lines = [f"📊 Звіт домашніх завдань\nГрупа: {meta['subject']} {meta['day']} {meta['time']}\n"]
+    low_performers = []
+
+    for row in rows:
+        name = row[1].strip()
+        done = 0
+        for col in last_3_hw:
+            if len(row) > col and str(row[col]).strip().upper() == "TRUE":
+                done += 1
+        total = len(last_3_hw)
+        lines.append(f"{name} – {done}/{total}")
+        if done <= 1:
+            low_performers.append(name)
+
+    if len(lines) == 1:
+        lines.append("Немає студентів.")
+
+    report = "\n".join(lines)
+    return report, low_performers
+
+
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    user_id = query.from_user.id
+    if user_id not in ALLOWED_USER_IDS:
+        await query.message.reply_text("🚫 Доступ заборонено.")
+        return
+
+    data = query.data
+
+    try:
+        if data == "attendance_report":
+            await query.message.reply_text("⏳ Збираю звіт по відвідуваності...")
+            report = get_attendance_summary()
+            await query.message.reply_text(report)
+
+        elif data == "homework_menu":
+            client = get_gspread_client()
+            spreadsheet = client.open("attendance")
+            buttons = []
+            for ws in spreadsheet.worksheets():
+                meta = parse_sheet_name(ws.title)
+                label = f"{meta['subject']} {meta['time']}"
+                # Обрізаємо callback_data, щоб не перевищити ліміт Telegram (64 байти)
+                cb_data = f"hw:{ws.title}"[:64]
+                buttons.append([InlineKeyboardButton(label, callback_data=cb_data)])
+            if not buttons:
+                await query.message.reply_text("Немає груп для звіту.")
+                return
+            reply_markup = InlineKeyboardMarkup(buttons)
+            await query.message.reply_text("Обери групу для звіту по домашках:", reply_markup=reply_markup)
+
+        elif data.startswith("hw:"):
+            sheet_title = data[3:]
+            await query.message.reply_text("⏳ Формую звіт по домашках...")
+            report, low_performers = await get_homework_report_for_group(sheet_title)
+            context.user_data["low_performers"] = low_performers
+
+            keyboard = []
+            if low_performers:
+                keyboard.append([InlineKeyboardButton("💡 Показати рекомендації", callback_data="hw_recommendations")])
+            reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+            await query.message.reply_text(report, reply_markup=reply_markup)
+
+        elif data == "hw_recommendations":
+            low = context.user_data.get("low_performers", [])
+            if not low:
+                await query.message.reply_text("Немає дітей з низьким результатом за останні 3 заняття.")
+                return
+            lines = ["💡 Рекомендації:\n"]
+            for name in low:
+                lines.append(
+                    f"**{name}** — потрібно нагадати батькам, що дитина не виконує домашні завдання. "
+                    "Прохання проконтролювати це до наступного заняття."
+                )
+            await query.message.reply_text("\n\n".join(lines), parse_mode="Markdown")
+
+    except Exception as e:
+        print(f"❌ Помилка в callback: {e}")
+        await query.message.reply_text(f"❌ Сталася помилка: {e}")
+
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
+
+    # Важливо: CallbackQueryHandler реєструємо рано
+    app.add_handler(CallbackQueryHandler(handle_callback))
 
     # Старі хендлери (не чіпаємо)
     app.add_handler(CommandHandler("start", handle_start_command))
@@ -529,14 +734,16 @@ def main():
     app.add_handler(CommandHandler("send_today_reminders", handle_send_today))
     app.add_handler(CommandHandler("getid", get_chat_id_handler))
     app.add_handler(CommandHandler("send_all", handle_send_all))
-    app.add_handler(
-        MessageHandler(filters.ALL & ~filters.COMMAND, handle_send_all_message)
-    )
 
     # Нові LLM-хендлери (тільки тестові групи)
     app.add_handler(CommandHandler("interest_fact", handle_interest_fact))
     app.add_handler(CommandHandler("game", handle_game))
     app.add_handler(CommandHandler("game_answer", handle_game_answer))
+
+    # Загальний MessageHandler — в самому кінці
+    app.add_handler(
+        MessageHandler(filters.ALL & ~filters.COMMAND, handle_send_all_message)
+    )
 
     print("""🤖 Бот працює! Напиши /start або /send у Telegram.
     P.S За потреби запусти команду getid в чатах, щоб отримати id чату для додавання його до коду""")
@@ -548,10 +755,11 @@ def main():
         app.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            webhook_url=webhook_url
+            webhook_url=webhook_url,
+            allowed_updates=Update.ALL_TYPES,
         )
     else:
-        app.run_polling()
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
